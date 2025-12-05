@@ -1,3 +1,5 @@
+import Ionicons from "@expo/vector-icons/Ionicons"; // Icons
+import { useRouter } from "expo-router"; // Needed for navigation
 import React from "react";
 import {
   ScrollView,
@@ -10,28 +12,35 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { usePlan } from "../../contexts/PlanContext";
 
 export default function DashboardScreen() {
+  const router = useRouter();
   const { budget, moneySpent, caloriesConsumed } = usePlan();
 
-  // Calculations for the UI
+  // 1. Calculate Stats
   const budgetLeft = budget - moneySpent;
-  const budgetProgress = (budgetLeft / budget) * 100;
-  const calorieTarget = 2400; // Average Male Student
-  const calorieProgress = (caloriesConsumed / calorieTarget) * 100;
+  const budgetProgress = Math.max(0, (budgetLeft / budget) * 100);
+  const calorieTarget = 2400; // Average GIKI student
+  const calorieProgress = Math.min(
+    100,
+    (caloriesConsumed / calorieTarget) * 100
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>Hello, GIKian!</Text>
+          <Text style={styles.greeting}>Hello, GIKian! 👋</Text>
           <Text style={styles.subGreeting}>Let's save some money today.</Text>
         </View>
 
-        {/* 1. The "Dual-Fuel" Gauge (Money vs Food) */}
+        {/* 2. The "Dual-Fuel" Gauge (Money vs Food) */}
         <View style={styles.statsContainer}>
-          {/* Budget Card */}
+          {/* Budget Card (Green) */}
           <View style={[styles.statCard, { backgroundColor: "#E8F5E9" }]}>
-            <Text style={styles.statLabel}>Budget Left</Text>
+            <View style={styles.cardHeader}>
+              <Text style={styles.statLabel}>Budget Left</Text>
+              <Ionicons name="wallet-outline" size={18} color="#2E7D32" />
+            </View>
             <Text style={[styles.statValue, { color: "#2E7D32" }]}>
               PKR {budgetLeft}
             </Text>
@@ -46,9 +55,12 @@ export default function DashboardScreen() {
             <Text style={styles.statSub}>of PKR {budget}</Text>
           </View>
 
-          {/* Calorie Card */}
+          {/* Calorie Card (Red) */}
           <View style={[styles.statCard, { backgroundColor: "#FFEBEE" }]}>
-            <Text style={styles.statLabel}>Calories</Text>
+            <View style={styles.cardHeader}>
+              <Text style={styles.statLabel}>Calories</Text>
+              <Ionicons name="flame-outline" size={18} color="#C62828" />
+            </View>
             <Text style={[styles.statValue, { color: "#C62828" }]}>
               {caloriesConsumed}
             </Text>
@@ -64,30 +76,46 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* 2. Today's "Next Meal" Teaser */}
+        {/* 3. Up Next Section (Dynamic) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Up Next</Text>
           <View style={styles.mealCard}>
             <View style={styles.mealHeader}>
-              <Text style={styles.mealTime}>LUNCH • 1:00 PM</Text>
-              <Text style={styles.mealLocation}>📍 Mess</Text>
+              <Text style={styles.mealTime}>RECOMMENDED</Text>
+              <Text style={styles.mealLocation}>📍 Check Plan Tab</Text>
             </View>
-            <Text style={styles.mealName}>Chicken Biryani (Mess)</Text>
-            <Text style={styles.mealPrice}>Cost: Free (Pre-paid)</Text>
+            <Text style={styles.mealName}>
+              Go to "Weekly Plan" to track meals.
+            </Text>
 
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionText}>Mark as Eaten</Text>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => router.push("/explore")} // Navigates to the 2nd tab
+            >
+              <Text style={styles.actionText}>View Full Menu</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 3. Quick Actions */}
+        {/* 4. Quick Actions (Buttons) */}
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.row}>
-          <TouchableOpacity style={styles.smallButton}>
-            <Text>🎲 Shuffle</Text>
+          {/* Shuffle Shortcut */}
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => router.push("/explore")}
+          >
+            <Ionicons name="shuffle" size={24} color="#3B82F6" />
+            <Text style={styles.btnLabel}>Shuffle</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.smallButton}>
-            <Text>➕ Add Snack</Text>
+
+          {/* ADD SNACK BUTTON (This is what you were missing!) */}
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => router.push("/add-food")}
+          >
+            <Ionicons name="add-circle" size={24} color="#10B981" />
+            <Text style={styles.btnLabel}>Add Snack</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -98,33 +126,39 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB" },
   scrollContent: { padding: 20 },
-  header: { marginBottom: 20 },
-  greeting: { fontSize: 24, fontWeight: "bold", color: "#111827" },
-  subGreeting: { fontSize: 16, color: "#6B7280" },
+  header: { marginBottom: 25 },
+  greeting: { fontSize: 26, fontWeight: "bold", color: "#111827" },
+  subGreeting: { fontSize: 16, color: "#6B7280", marginTop: 5 },
 
   statsContainer: { flexDirection: "row", gap: 15, marginBottom: 25 },
   statCard: {
     flex: 1,
     padding: 15,
-    borderRadius: 16,
+    borderRadius: 20,
     justifyContent: "space-between",
+    minHeight: 140,
   },
-  statLabel: { fontSize: 14, color: "#6B7280", fontWeight: "600" },
-  statValue: { fontSize: 22, fontWeight: "bold", marginVertical: 8 },
-  statSub: { fontSize: 12, color: "#9CA3AF", marginTop: 5 },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
+  statLabel: { fontSize: 13, color: "#4B5563", fontWeight: "600" },
+  statValue: { fontSize: 24, fontWeight: "bold", marginVertical: 8 },
+  statSub: { fontSize: 11, color: "#6B7280", marginTop: 5 },
 
   progressBarBg: {
     height: 6,
-    backgroundColor: "rgba(0,0,0,0.05)",
+    backgroundColor: "rgba(0,0,0,0.1)",
     borderRadius: 3,
   },
   progressBarFill: { height: 6, borderRadius: 3 },
 
-  section: { marginBottom: 20 },
+  section: { marginBottom: 25 },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: 15,
     color: "#374151",
   },
 
@@ -144,12 +178,11 @@ const styles = StyleSheet.create({
   },
   mealTime: { fontSize: 12, fontWeight: "bold", color: "#9CA3AF" },
   mealLocation: { fontSize: 12, fontWeight: "bold", color: "#3B82F6" },
-  mealName: { fontSize: 18, fontWeight: "600", marginBottom: 5 },
-  mealPrice: {
-    fontSize: 14,
-    color: "#10B981",
+  mealName: {
+    fontSize: 16,
     fontWeight: "500",
     marginBottom: 15,
+    color: "#4B5563",
   },
 
   actionButton: {
@@ -160,14 +193,18 @@ const styles = StyleSheet.create({
   },
   actionText: { color: "white", fontWeight: "bold" },
 
-  row: { flexDirection: "row", gap: 10 },
+  row: { flexDirection: "row", gap: 15 },
   smallButton: {
     flex: 1,
     backgroundColor: "white",
-    padding: 15,
-    borderRadius: 12,
+    padding: 20,
+    borderRadius: 16,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOpacity: 0.02,
+    elevation: 1,
   },
+  btnLabel: { marginTop: 8, fontWeight: "600", color: "#374151" },
 });

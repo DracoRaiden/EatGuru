@@ -30,6 +30,7 @@ interface PlanContextType {
   shuffleCount: number;
   isPremium: boolean;
   unlockPremium: () => void;
+  addCustomTransaction: (name: string, price: number, calories: number) => void;
 }
 
 const PlanContext = createContext<PlanContextType | undefined>(undefined);
@@ -44,6 +45,28 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
   const [shuffleCount, setShuffleCount] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
 
+  const addCustomTransaction = (
+    name: string,
+    price: number,
+    calories: number
+  ) => {
+    // 1. Update Totals
+    setMoneySpent((prev) => prev + price);
+    setCaloriesConsumed((prev) => prev + calories);
+
+    // 2. Optional: Log it for history (We aren't storing history in MVP, but this is where it goes)
+    console.log(
+      `Logged Custom Item: ${name} | ${price} PKR | ${calories} kcal`
+    );
+
+    // 3. Alert the user of the impact
+    if (price > 500) {
+      Alert.alert(
+        "Big Spender!",
+        `That ${name} just took a chunk out of your budget.`
+      );
+    }
+  };
   const generatePlan = () => {
     const newPlan = generateWeeklyPlan(budget);
     setPlan(newPlan);
@@ -200,6 +223,7 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
         shuffleCount,
         isPremium,
         unlockPremium,
+        addCustomTransaction,
       }}
     >
       {children}
