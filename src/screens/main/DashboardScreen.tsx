@@ -13,8 +13,9 @@ import { usePlan } from "../../contexts/PlanContext";
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { budget, moneySpent, caloriesConsumed } = usePlan();
-
+  // Inside DashboardScreen component
+  const { budget, moneySpent, caloriesConsumed, shuffleCount, isPremium } =
+    usePlan(); // <--- Add shuffleCount, isPremium
   // 1. Calculate Stats
   const budgetLeft = budget - moneySpent;
   const budgetProgress = Math.max(0, (budgetLeft / budget) * 100);
@@ -23,7 +24,15 @@ export default function DashboardScreen() {
     100,
     (caloriesConsumed / calorieTarget) * 100
   );
-
+  // Logic: How many shuffles are left?
+  const maxShuffles = 5;
+  const shufflesLeft = Math.max(0, maxShuffles - shuffleCount);
+  const shuffleLabel = isPremium ? "Unlimited" : `${shufflesLeft} left`;
+  const shuffleColor = isPremium
+    ? "#8B5CF6"
+    : shufflesLeft === 0
+    ? "#EF4444"
+    : "#6B7280"; // Purple (Prem), Red (0), Grey (Normal)
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -100,13 +109,25 @@ export default function DashboardScreen() {
         {/* 4. Quick Actions (Buttons) */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.row}>
-          {/* Shuffle Shortcut */}
+          {/* Shuffle Shortcut with Counter */}
           <TouchableOpacity
             style={styles.smallButton}
             onPress={() => router.push("/explore")}
           >
             <Ionicons name="shuffle" size={24} color="#3B82F6" />
             <Text style={styles.btnLabel}>Shuffle</Text>
+
+            {/* NEW: Counter Badge */}
+            <Text
+              style={{
+                fontSize: 10,
+                color: shuffleColor,
+                fontWeight: "600",
+                marginTop: 2,
+              }}
+            >
+              {shuffleLabel}
+            </Text>
           </TouchableOpacity>
 
           {/* ADD SNACK BUTTON (This is what you were missing!) */}
