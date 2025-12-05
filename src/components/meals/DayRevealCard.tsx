@@ -1,17 +1,18 @@
 import Ionicons from "@expo/vector-icons/Ionicons"; // <--- ADD THIS LINE
+import { useRouter } from "expo-router";
 import React from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { usePlan } from "../../contexts/PlanContext"; // Import Hook
 import { DayPlan } from "../../types/DailyPlan";
 import { IconSymbol } from "../common/icon-symbol";
-
 interface Props {
   day: DayPlan;
   dayIndex: number;
 }
 
 export default function DayRevealCard({ day, dayIndex }: Props) {
-  const { toggleMealStatus, shuffleMeal } = usePlan();
+  const { toggleMealStatus, shuffleMeal, shuffleCount, isPremium } = usePlan(); // Get isPremium
+  const router = useRouter();
   const isLocked = !day.isRevealed;
 
   // Helper Component for a Single Meal Row
@@ -31,6 +32,15 @@ export default function DayRevealCard({ day, dayIndex }: Props) {
           "Action Blocked",
           "You cannot shuffle a meal you have already eaten!"
         );
+        return;
+      }
+
+      // --- NEW TRIGGER LOGIC ---
+      if (!isPremium && shuffleCount >= 5) {
+        Alert.alert("Limit Reached", "You have used all your free shuffles.", [
+          { text: "Cancel", style: "cancel" },
+          { text: "Upgrade", onPress: () => router.push("/premium") }, // <--- NAVIGATE HERE
+        ]);
         return;
       }
       shuffleMeal(dayIndex, type);

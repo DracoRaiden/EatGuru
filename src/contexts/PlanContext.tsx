@@ -9,6 +9,7 @@ import { Alert } from "react-native"; // <--- Add this import
 import { MenuData } from "../constants/MenuData";
 import { generateWeeklyPlan } from "../engine/Generator"; // Import the Engine!
 import { WeeklyPlan } from "../types/DailyPlan"; // Ensure MealTime is imported or defined as string
+import { useRouter } from "expo-router";
 
 interface PlanContextType {
   budget: number;
@@ -26,6 +27,8 @@ interface PlanContextType {
     mealType: "breakfast" | "lunch" | "dinner"
   ) => void;
   shuffleCount: number;
+  isPremium: boolean;
+  unlockPremium: () => void;
 }
 
 const PlanContext = createContext<PlanContextType | undefined>(undefined);
@@ -37,6 +40,16 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
   const [moneySpent, setMoneySpent] = useState(0);
   // Add this line with your other useState hooks
   const [shuffleCount, setShuffleCount] = useState(0);
+  const [isPremium, setIsPremium] = useState(false);
+
+  const unlockPremium = () => {
+    setIsPremium(true);
+    Alert.alert(
+      "Welcome, Transformer!",
+      "You now have unlimited shuffles and macro tracking."
+    );
+  };
+
   const toggleMealStatus = (
     dayIndex: number,
     mealType: "breakfast" | "lunch" | "dinner"
@@ -96,93 +109,92 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
 
   // ... inside PlanProvider
 
+  // Inside src/contexts/PlanContext.tsx
+
   const shuffleMeal = (
     dayIndex: number,
     mealType: "breakfast" | "lunch" | "dinner"
   ) => {
     if (!plan) return;
 
-    // 1. Check Limits
     if (shuffleCount >= 5) {
       Alert.alert(
         "Limit Reached",
-        "You have used all 5 shuffles for this month. Upgrade to Premium for unlimited shuffles!"
+        "Upgrade to Premium for unlimited shuffles!"
       );
       return;
     }
 
     const newPlan = { ...plan };
     const day = newPlan.days[dayIndex];
-    const currentMeal = day.meals[mealType];
-    const currentItem = currentMeal.item;
+    const currentItem = day.meals[mealType].item;
 
-    // --- NEW: THE MESS INTEGRITY LOGIC ---
+    // 1. Get Candidates (All valid items for this meal time, excluding current)
+    const candidates = MenuData.filter(
+      (item) =>
+        item.category.includes(
+          (mealType.charAt(0).toUpperCase() + mealType.slice(1)) as any
+        ) && item.id !== currentItem.id
+    );
 
-    // Check if we are breaking a "Mess Day"
-    const isMessDay = currentItem.isMess;
-    let mealsToSwap: ("lunch" | "dinner")[] = [];
-
-    if (isMessDay && (mealType === "lunch" || mealType === "dinner")) {
-      // If leaving Mess, we must swap BOTH Lunch and Dinner
-      mealsToSwap = ["lunch", "dinner"];
-
-      // Optional: Alert the user (You can remove this if you want it to be silent)
-      Alert.alert(
-        "Leaving Mess Plan",
-        "Since Mess is a daily deal, we are shuffling both Lunch and Dinner for you.",
-        [{ text: "OK" }]
-      );
-    } else {
-      // Normal Shuffle (Just this meal)
-      mealsToSwap = [mealType as "lunch" | "dinner"]; // Cast for simplicity, breakfast logic is separate usually
-    }
-
-    // 2. Perform the Swap(s)
-    let swapSuccess = false;
-
-    mealsToSwap.forEach((type) => {
-      // Don't swap if it's breakfast (unless your mess has breakfast, usually it's lunch/dinner)
-      if (type === "breakfast") return;
-
-      const oldItem = day.meals[type].item;
-
-      // Filter candidates
-      // If we are breaking a Mess Day, we ONLY want Non-Mess options
-      // If we are doing a normal shuffle, we accept anything except the current item
-      const candidates = MenuData.filter(
-        (item) =>
-          item.category.includes(
-            (type.charAt(0).toUpperCase() + type.slice(1)) as any
-          ) &&
-          item.id !== oldItem.id &&
-          (isMessDay ? !item.isMess : true) // If leaving mess, ban mess items from candidates
-      );
-
-      if (candidates.length > 0) {
-        const newItem =
-          candidates[Math.floor(Math.random() * candidates.length)];
-
-        // Update Data
-        day.meals[type].item = newItem;
-        day.meals[type].status = "swapped";
-
-        // Update Budget/Calories
-        day.totalCost = day.totalCost - oldItem.price + newItem.price;
-        day.totalCalories =
-          day.totalCalories - oldItem.calories + newItem.calories;
-
-        swapSuccess = true;
-      }
-    });
-
-    if (!swapSuccess) {
-      Alert.alert("No Options", "Could not find an alternative meal.");
+    if (candidates.length === 0) {
+      Alert.alert("No Options", "No alternatives found.");
       return;
     }
 
-    // 3. Save & Increment Counter
+    // 2. Pick a Random Candidate First
+    const newItem = candidates[Math.floor(Math.random() * candidates.length)];
+
+    // 3. Analyze the Switch
+    const isEnteringMess = !currentItem.isMess && newItem.isMess; // Was Cafe -> Now Mess
+    const isLeavingMess = currentItem.isMess && !newItem.isMess; // Was Mess -> Now Cafe
+
+    // 4. Determine Scope (Do we update just this meal, or both Lunch & Dinner?)
+    let mealsToUpdate: ("lunch" | "dinner")[] = [
+      mealType as "lunch" | "dinner",
+    ];
+
+    // If it involves Mess (Entering OR Leaving) and it's not Breakfast, update BOTH
+    if ((isEnteringMess || isLeavingMess) && mealType !== "breakfast") {
+      mealsToUpdate = ["lunch", "dinner"];
+
+      const action = isEnteringMess ? "joining" : "leaving";
+      Alert.alert(
+        "Mess Plan Update",
+        `You are ${action} the Mess plan. Both Lunch and Dinner will be updated.`,
+        [{ text: "OK" }]
+      );
+    }
+
+    // 5. Execute Updates
+    mealsToUpdate.forEach((type) => {
+      const oldItem = day.meals[type].item;
+      let selectedItem = newItem; // Default to the one we picked
+
+      // CORRECTION: If we are updating the *other* meal (e.g. we picked Lunch, now updating Dinner)
+      // We need to find a matching item for that type.
+      if (type !== mealType) {
+        // Find a compatible item for the OTHER slot
+        const otherCandidates = MenuData.filter(
+          (i) =>
+            i.category.includes(
+              (type.charAt(0).toUpperCase() + type.slice(1)) as any
+            ) && i.isMess === newItem.isMess // MUST match the new status (Mess or Not)
+        );
+        selectedItem =
+          otherCandidates[Math.floor(Math.random() * otherCandidates.length)];
+      }
+
+      // Apply Changes
+      day.meals[type].item = selectedItem;
+      day.meals[type].status = "swapped";
+      day.totalCost = day.totalCost - oldItem.price + selectedItem.price;
+      day.totalCalories =
+        day.totalCalories - oldItem.calories + selectedItem.calories;
+    });
+
     setPlan(newPlan);
-    setShuffleCount((prev) => prev + 1); // We still only charge 1 shuffle credit!
+    setShuffleCount((prev) => prev + 1);
   };
 
   // --- NEW LOGIC START ---
@@ -216,6 +228,8 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
         toggleMealStatus, // Export the new function
         shuffleMeal,
         shuffleCount,
+        isPremium,
+        unlockPremium,
       }}
     >
       {children}
