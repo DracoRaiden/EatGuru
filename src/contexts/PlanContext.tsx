@@ -1,7 +1,13 @@
-import React, { createContext, ReactNode, useContext, useState } from "react";
+import React, {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react"; // Added useEffect
+import { generateWeeklyPlan } from "../engine/Generator"; // Import the Engine!
 import { WeeklyPlan } from "../types/DailyPlan";
 
-// Define what data is available to the app
 interface PlanContextType {
   budget: number;
   setBudget: (amount: number) => void;
@@ -14,18 +20,29 @@ interface PlanContextType {
 const PlanContext = createContext<PlanContextType | undefined>(undefined);
 
 export const PlanProvider = ({ children }: { children: ReactNode }) => {
-  const [budget, setBudget] = useState(15000); // Default GIKI Budget
+  const [budget, setBudget] = useState(15000);
   const [plan, setPlan] = useState<WeeklyPlan | null>(null);
   const [caloriesConsumed, setCaloriesConsumed] = useState(0);
   const [moneySpent, setMoneySpent] = useState(0);
 
-  // Temporary function to simulate plan generation
+  // --- NEW LOGIC START ---
   const generatePlan = () => {
-    // For now, we just log this.
-    // In Step 7, we will actually call the Engine here.
-    console.log("Generating Plan for Budget:", budget);
-    // setPlan(generatedPlan);
+    console.log("Running Algorithm for Budget:", budget);
+    const newPlan = generateWeeklyPlan(budget); // Call the Engine
+    setPlan(newPlan);
+
+    // Reset trackers when new plan is made
+    setCaloriesConsumed(0);
+    setMoneySpent(0);
   };
+
+  // Automatically generate a plan on first load if one doesn't exist
+  useEffect(() => {
+    if (!plan) {
+      generatePlan();
+    }
+  }, []);
+  // --- NEW LOGIC END ---
 
   return (
     <PlanContext.Provider
