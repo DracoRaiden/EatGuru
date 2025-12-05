@@ -1,5 +1,8 @@
 import { FoodItem } from "./FoodItem";
 
+// 1. NEW: Define and Export the MealTime type
+export type MealTime = "breakfast" | "lunch" | "dinner" | "snack";
+
 export interface DailyMeal {
   item: FoodItem;
   status: "pending" | "eaten" | "skipped" | "swapped";
