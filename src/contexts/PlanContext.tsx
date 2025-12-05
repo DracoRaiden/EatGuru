@@ -4,12 +4,11 @@ import React, {
   useContext,
   useEffect,
   useState,
-} from "react"; // Added useEffect
-import { Alert } from "react-native"; // <--- Add this import
+} from "react";
+import { Alert } from "react-native";
 import { MenuData } from "../constants/MenuData";
-import { generateWeeklyPlan } from "../engine/Generator"; // Import the Engine!
-import { WeeklyPlan } from "../types/DailyPlan"; // Ensure MealTime is imported or defined as string
-import { useRouter } from "expo-router";
+import { generateWeeklyPlan } from "../engine/Generator";
+import { WeeklyPlan } from "../types/DailyPlan";
 
 interface PlanContextType {
   budget: number;
@@ -26,6 +25,8 @@ interface PlanContextType {
     dayIndex: number,
     mealType: "breakfast" | "lunch" | "dinner"
   ) => void;
+
+  // VITAL: Ensure these are here
   shuffleCount: number;
   isPremium: boolean;
   unlockPremium: () => void;
@@ -38,27 +39,30 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
   const [plan, setPlan] = useState<WeeklyPlan | null>(null);
   const [caloriesConsumed, setCaloriesConsumed] = useState(0);
   const [moneySpent, setMoneySpent] = useState(0);
-  // Add this line with your other useState hooks
+
+  // State for Premium Features
   const [shuffleCount, setShuffleCount] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
 
-  const unlockPremium = () => {
-    setIsPremium(true);
-    Alert.alert(
-      "Welcome, Transformer!",
-      "You now have unlimited shuffles and macro tracking."
-    );
+  const generatePlan = () => {
+    const newPlan = generateWeeklyPlan(budget);
+    setPlan(newPlan);
+    setCaloriesConsumed(0);
+    setMoneySpent(0);
+    setShuffleCount(0); // Reset shuffles on new plan
   };
+
+  useEffect(() => {
+    if (!plan) generatePlan();
+  }, []);
 
   const toggleMealStatus = (
     dayIndex: number,
     mealType: "breakfast" | "lunch" | "dinner"
   ) => {
     if (!plan) return;
-    // --- NEW: STRICT PROGRESSION CHECK ---
-    // If we are trying to edit Day 2 (Index 1) or higher...
+
     if (dayIndex > 0) {
-      // Check if the Previous Day (Index - 1) is fully eaten
       const prevDay = plan.days[dayIndex - 1];
       const isPrevDayFinished =
         prevDay.meals.breakfast.status === "eaten" &&
@@ -70,46 +74,38 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
           "Locked",
           "Please finish yesterday's meals before starting a new day!"
         );
-        return; // <--- STOP EXECUTION HERE
+        return;
       }
     }
+
     const newPlan = { ...plan };
     const day = newPlan.days[dayIndex];
     const meal = day.meals[mealType];
-    // 2. Toggle Logic
+
     if (meal.status === "eaten") {
-      // Undo: Remove cost/calories
       meal.status = "pending";
       setMoneySpent((prev) => prev - meal.item.price);
       setCaloriesConsumed((prev) => prev - meal.item.calories);
     } else {
-      // Do: Add cost/calories
       meal.status = "eaten";
       setMoneySpent((prev) => prev + meal.item.price);
       setCaloriesConsumed((prev) => prev + meal.item.calories);
     }
 
-    // 3. The "Rolling Reveal" Check
-    // If Breakfast, Lunch, AND Dinner are all eaten...
+    // Unlock next day logic
     if (
       day.meals.breakfast.status === "eaten" &&
       day.meals.lunch.status === "eaten" &&
       day.meals.dinner.status === "eaten"
     ) {
-      // Unlock the target day (Current Day Index + 3)
       const targetUnlockIndex = dayIndex + 3;
       if (newPlan.days[targetUnlockIndex]) {
         newPlan.days[targetUnlockIndex].isRevealed = true;
       }
     }
 
-    // 4. Save
     setPlan(newPlan);
   };
-
-  // ... inside PlanProvider
-
-  // Inside src/contexts/PlanContext.tsx
 
   const shuffleMeal = (
     dayIndex: number,
@@ -117,11 +113,10 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
   ) => {
     if (!plan) return;
 
-    if (shuffleCount >= 5) {
-      Alert.alert(
-        "Limit Reached",
-        "Upgrade to Premium for unlimited shuffles!"
-      );
+    // NOTE: We REMOVED the "Alert" here so it doesn't conflict with the UI Alert.
+    // We only silently block if the count is reached to prevent hacking.
+    if (!isPremium && shuffleCount >= 5) {
+      console.log("Shuffle blocked by Context: Limit Reached");
       return;
     }
 
@@ -129,7 +124,6 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
     const day = newPlan.days[dayIndex];
     const currentItem = day.meals[mealType].item;
 
-    // 1. Get Candidates (All valid items for this meal time, excluding current)
     const candidates = MenuData.filter(
       (item) =>
         item.category.includes(
@@ -142,50 +136,39 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // 2. Pick a Random Candidate First
     const newItem = candidates[Math.floor(Math.random() * candidates.length)];
 
-    // 3. Analyze the Switch
-    const isEnteringMess = !currentItem.isMess && newItem.isMess; // Was Cafe -> Now Mess
-    const isLeavingMess = currentItem.isMess && !newItem.isMess; // Was Mess -> Now Cafe
-
-    // 4. Determine Scope (Do we update just this meal, or both Lunch & Dinner?)
+    // Mess Logic
+    const isEnteringMess = !currentItem.isMess && newItem.isMess;
+    const isLeavingMess = currentItem.isMess && !newItem.isMess;
     let mealsToUpdate: ("lunch" | "dinner")[] = [
       mealType as "lunch" | "dinner",
     ];
 
-    // If it involves Mess (Entering OR Leaving) and it's not Breakfast, update BOTH
     if ((isEnteringMess || isLeavingMess) && mealType !== "breakfast") {
       mealsToUpdate = ["lunch", "dinner"];
-
       const action = isEnteringMess ? "joining" : "leaving";
       Alert.alert(
         "Mess Plan Update",
-        `You are ${action} the Mess plan. Both Lunch and Dinner will be updated.`,
-        [{ text: "OK" }]
+        `You are ${action} the Mess plan. Lunch & Dinner updated.`
       );
     }
 
-    // 5. Execute Updates
     mealsToUpdate.forEach((type) => {
       const oldItem = day.meals[type].item;
-      let selectedItem = newItem; // Default to the one we picked
+      let selectedItem = newItem;
 
-      // CORRECTION: If we are updating the *other* meal (e.g. we picked Lunch, now updating Dinner)
-      // We need to find a matching item for that type.
       if (type !== mealType) {
-        // Find a compatible item for the OTHER slot
         const otherCandidates = MenuData.filter(
           (i) =>
             i.category.includes(
               (type.charAt(0).toUpperCase() + type.slice(1)) as any
-            ) && i.isMess === newItem.isMess // MUST match the new status (Mess or Not)
+            ) && i.isMess === newItem.isMess
         );
         selectedItem =
           otherCandidates[Math.floor(Math.random() * otherCandidates.length)];
       }
 
-      // Apply Changes
       day.meals[type].item = selectedItem;
       day.meals[type].status = "swapped";
       day.totalCost = day.totalCost - oldItem.price + selectedItem.price;
@@ -194,27 +177,13 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
     });
 
     setPlan(newPlan);
-    setShuffleCount((prev) => prev + 1);
+    setShuffleCount((prev) => prev + 1); // Increment!
   };
 
-  // --- NEW LOGIC START ---
-  const generatePlan = () => {
-    console.log("Running Algorithm for Budget:", budget);
-    const newPlan = generateWeeklyPlan(budget); // Call the Engine
-    setPlan(newPlan);
-
-    // Reset trackers when new plan is made
-    setCaloriesConsumed(0);
-    setMoneySpent(0);
+  const unlockPremium = () => {
+    setIsPremium(true);
+    Alert.alert("Welcome, Transformer!", "You now have unlimited shuffles.");
   };
-
-  // Automatically generate a plan on first load if one doesn't exist
-  useEffect(() => {
-    if (!plan) {
-      generatePlan();
-    }
-  }, []);
-  // --- NEW LOGIC END ---
 
   return (
     <PlanContext.Provider
@@ -225,8 +194,9 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
         generatePlan,
         caloriesConsumed,
         moneySpent,
-        toggleMealStatus, // Export the new function
+        toggleMealStatus,
         shuffleMeal,
+        // VITAL: Checking if these were missing in your previous code
         shuffleCount,
         isPremium,
         unlockPremium,

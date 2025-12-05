@@ -1,15 +1,22 @@
 import Ionicons from "@expo/vector-icons/Ionicons"; // <--- ADD THIS LINE
 import { useRouter } from "expo-router";
 import React from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { usePlan } from "../../contexts/PlanContext"; // Import Hook
 import { DayPlan } from "../../types/DailyPlan";
 import { IconSymbol } from "../common/icon-symbol";
+
 interface Props {
   day: DayPlan;
   dayIndex: number;
 }
-
 export default function DayRevealCard({ day, dayIndex }: Props) {
   const { toggleMealStatus, shuffleMeal, shuffleCount, isPremium } = usePlan(); // Get isPremium
   const router = useRouter();
@@ -27,22 +34,47 @@ export default function DayRevealCard({ day, dayIndex }: Props) {
 
     // Handler for Shuffle
     const handleShuffle = () => {
+      console.log("Shuffle Clicked. Count:", shuffleCount);
+
       if (isEaten) {
-        Alert.alert(
-          "Action Blocked",
-          "You cannot shuffle a meal you have already eaten!"
-        );
+        if (Platform.OS === "web") {
+          alert(
+            "Action Blocked: You cannot shuffle a meal you have already eaten!"
+          );
+        } else {
+          Alert.alert(
+            "Action Blocked",
+            "You cannot shuffle a meal you have already eaten!"
+          );
+        }
         return;
       }
 
-      // --- NEW TRIGGER LOGIC ---
+      // --- THE PREMIUM TRIGGER (Web Fixed) ---
       if (!isPremium && shuffleCount >= 5) {
-        Alert.alert("Limit Reached", "You have used all your free shuffles.", [
-          { text: "Cancel", style: "cancel" },
-          { text: "Upgrade", onPress: () => router.push("/premium") }, // <--- NAVIGATE HERE
-        ]);
+        if (Platform.OS === "web") {
+          // 1. Browser-Specific Popup
+          const wantsToUpgrade = window.confirm(
+            "Limit Reached: You have used all your free shuffles. Do you want to Upgrade?"
+          );
+          if (wantsToUpgrade) {
+            router.push("/premium");
+          }
+        } else {
+          // 2. Mobile-Specific Popup
+          Alert.alert(
+            "Limit Reached",
+            "You have used all your free shuffles.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Upgrade", onPress: () => router.push("/premium") },
+            ]
+          );
+        }
         return;
       }
+      // ---------------------------------------
+
       shuffleMeal(dayIndex, type);
     };
 
